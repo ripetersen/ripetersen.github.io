@@ -1,0 +1,703 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bl — Agent-First Backlog Management</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/black.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/monokai.min.css"
+    />
+    <style>
+      :root {
+        --r-heading-font: system-ui, -apple-system, sans-serif;
+        --r-main-font: system-ui, -apple-system, sans-serif;
+        --r-code-font: "JetBrains Mono", "Fira Code", monospace;
+      }
+      .reveal h1,
+      .reveal h2,
+      .reveal h3 {
+        text-transform: none;
+      }
+      .reveal pre {
+        font-size: 0.55em;
+        width: 100%;
+      }
+      .reveal pre code {
+        max-height: 500px;
+        padding: 1em;
+      }
+      .reveal .small {
+        font-size: 0.7em;
+      }
+      .reveal .dim {
+        opacity: 0.5;
+      }
+      .reveal .highlight-orange {
+        color: #f0a030;
+      }
+      .reveal .highlight-green {
+        color: #4ec9b0;
+      }
+      .reveal .highlight-red {
+        color: #f44747;
+      }
+      .reveal .highlight-blue {
+        color: #569cd6;
+      }
+      .reveal .two-col {
+        display: flex;
+        gap: 2em;
+        align-items: flex-start;
+      }
+      .reveal .two-col > * {
+        flex: 1;
+      }
+      .reveal .emoji {
+        font-size: 1.5em;
+      }
+      .reveal ul {
+        text-align: left;
+      }
+      .reveal li {
+        margin-bottom: 0.4em;
+      }
+      .reveal blockquote {
+        font-style: italic;
+        border-left: 4px solid #f0a030;
+        padding-left: 1em;
+        text-align: left;
+      }
+      .reveal table {
+        margin: 0 auto;
+        font-size: 0.7em;
+      }
+      .reveal table th {
+        color: #f0a030;
+      }
+      .problem-card {
+        background: rgba(244, 71, 71, 0.1);
+        border: 1px solid rgba(244, 71, 71, 0.3);
+        border-radius: 8px;
+        padding: 1em;
+        margin: 0.5em 0;
+        text-align: left;
+      }
+      .solution-card {
+        background: rgba(78, 201, 176, 0.1);
+        border: 1px solid rgba(78, 201, 176, 0.3);
+        border-radius: 8px;
+        padding: 1em;
+        margin: 0.5em 0;
+        text-align: left;
+      }
+      .diagram {
+        font-family: var(--r-code-font);
+        font-size: 0.5em;
+        text-align: left;
+        line-height: 1.6;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 1em;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- TITLE -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h1><code>bl</code></h1>
+          <h3>Agent-First Backlog Management</h3>
+          <p class="small dim">Markdown. Git. Worktrees. Done.</p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- THE PROBLEM -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>The Problem</h2>
+          <p>AI agents are powerful.</p>
+          <p class="fragment">
+            But they forget
+            <span class="highlight-red">everything</span> between sessions.
+          </p>
+        </section>
+
+        <section>
+          <h2>Agent Memory Is a Lie</h2>
+          <div class="problem-card">
+            <p><strong>Session 1:</strong> "Build the login page"</p>
+            <p>Agent writes 400 lines. Commits. Session ends.</p>
+          </div>
+          <div class="problem-card fragment">
+            <p><strong>Session 2:</strong> "Now add password reset"</p>
+            <p>Agent has <em>no idea</em> what it built yesterday.</p>
+            <p>No context. No plan. No memory of decisions made.</p>
+          </div>
+        </section>
+
+        <section>
+          <h2>The Coordination Problem</h2>
+          <div class="problem-card">
+            <p><strong>Agent A</strong> is refactoring the router</p>
+          </div>
+          <div class="problem-card fragment">
+            <p><strong>Agent B</strong> is adding a new route</p>
+          </div>
+          <div class="problem-card fragment">
+            <p>
+              <strong>Result:</strong> merge conflicts, duplicated work, broken
+              builds
+            </p>
+          </div>
+          <p class="fragment small dim">
+            Shared mutable state + no coordination = chaos
+          </p>
+        </section>
+
+        <section>
+          <h2>The Trust Problem</h2>
+          <ul>
+            <li class="fragment">
+              Agents can write code&hellip; but should they merge it?
+            </li>
+            <li class="fragment">
+              Agents can commit&hellip; but should they push to main?
+            </li>
+            <li class="fragment">
+              Agents can be fast&hellip; but who reviews the work?
+            </li>
+          </ul>
+          <p class="fragment">
+            <br />You need <span class="highlight-orange">human gates</span> at
+            the right places.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- THE DESIGN -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>The Design</h2>
+          <p>A backlog system built for agents <em>and</em> humans.</p>
+        </section>
+
+        <section>
+          <h2>Three Principles</h2>
+          <ol>
+            <li class="fragment">
+              <span class="highlight-green">Everything is in git</span><br />
+              <span class="small"
+                >No database. No SaaS. No API keys. Just files.</span
+              >
+            </li>
+            <li class="fragment">
+              <span class="highlight-orange">Agent-first tooling</span><br />
+              <span class="small"
+                >Stories are structured data that agents can read, write, and
+                act on.</span
+              >
+            </li>
+            <li class="fragment">
+              <span class="highlight-blue">Human gatekeeping</span><br />
+              <span class="small"
+                >Agents work in isolation. Humans review and merge.</span
+              >
+            </li>
+          </ol>
+        </section>
+
+        <section>
+          <h2>Stories Are Markdown + Frontmatter</h2>
+          <pre><code class="language-yaml" data-trim>
+---
+epic: E01 · Auth & Onboarding
+story_id: S-42
+title: Password Reset Flow
+type: feature
+points: 5
+status: backlog
+added: 2026-03-15
+---
+
+# S-42 · Password Reset Flow
+
+## Summary
+Allow users to reset their password via email...
+
+## Acceptance Criteria
+- [ ] User receives reset email within 30 seconds
+- [ ] Token expires after 1 hour
+                    </code></pre>
+          <p class="small">Human-readable. Machine-parseable. Diff-friendly.</p>
+        </section>
+
+        <section>
+          <h2>The Lifecycle</h2>
+          <div class="diagram">
+            <pre>
+  ┌──────────┐      bl workon      ┌─────────────┐      bl done        ┌──────────┐
+  │          │    ───────────────> │             │   ───────────────>  │          │
+  │ backlog  │                     │ in_progress │                     │   done   │
+  │          │  creates worktree   │             │  archives story     │          │
+  └──────────┘  launches agent     └─────────────┘  syncs indexes      └──────────┘
+                sets status                         sets commit hash        │
+                                                                            │
+                                                                       bl cleanup
+                                                                            │
+                                                                       merge to main
+                                                                       push origin
+                                                                       remove worktree
+</pre
+            >
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- ISOLATION -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Isolation via Git Worktrees</h2>
+          <p>Each agent gets its own <em>complete copy</em> of the repo.</p>
+        </section>
+
+        <section>
+          <h2>The Layout</h2>
+          <div class="diagram">
+            <pre>
+  top-secret-project/                    main repo (stays on main)
+  │
+  top-secret-project-worktrees/
+  ├── s67-spa-navigation/                Agent 1 — own branch, own files
+  ├── s66-residence-record/              Agent 2 — completely independent
+  └── s65-storage-binding/               Agent 3 — no conflicts possible
+</pre
+            >
+          </div>
+          <p class="fragment small">
+            Worktrees share git history but have
+            <span class="highlight-green">separate working directories</span>.
+          </p>
+          <p class="fragment small">
+            No file locking. No race conditions. No coordination overhead.
+          </p>
+        </section>
+
+        <section>
+          <h2>Agent Permissions</h2>
+          <div class="two-col">
+            <div class="solution-card">
+              <p><strong class="highlight-green">Can do:</strong></p>
+              <ul class="small">
+                <li>Edit any file in their worktree</li>
+                <li>Run tests, install deps</li>
+                <li>Commit and push their branch</li>
+                <li>Read the full codebase</li>
+              </ul>
+            </div>
+            <div class="problem-card">
+              <p><strong class="highlight-red">Cannot do:</strong></p>
+              <ul class="small">
+                <li>Run backlog sync</li>
+                <li>Edit index files</li>
+                <li>Merge branches</li>
+                <li>Touch main</li>
+              </ul>
+            </div>
+          </div>
+          <p class="fragment small" style="margin-top: 1em">
+            Agents are powerful <em>within</em> their sandbox. Humans control
+            what reaches main.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- DEMO WALKTHROUGH -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>In Practice</h2>
+        </section>
+
+        <section>
+          <h2>Create a Story</h2>
+          <pre><code class="language-bash" data-trim>
+$ bl new --epic E01 --title "Password Reset" --points 5
+
+New backlog story — next available ID: S-42
+
+Created story: docs/backlog/e01-auth/S42-password-reset/index.md
+Syncing backlog... done.
+                    </code></pre>
+          <p class="small">
+            Or use the Claude Code skill:
+            <code>/bl-new --epic E01 --title "Password Reset" --points 5</code>
+          </p>
+          <div class="solution-card fragment" style="margin-top: 0.8em">
+            <p class="small">
+              Stories don't have to be pre-written. A designer can describe a
+              feature in conversation with the agent &mdash; the agent creates
+              the story, fills in acceptance criteria, estimates points, and
+              scaffolds the file. The backlog becomes a
+              <span class="highlight-orange">collaborative artifact</span>
+              between humans and agents.
+            </p>
+          </div>
+        </section>
+
+        <section>
+          <h2>Start Work</h2>
+          <pre><code class="language-bash" data-trim>
+$ bl workon S-42
+
+Story    : S-42 — Password Reset
+Branch   : s42-password-reset
+Worktree : ../top-secret-project-worktrees/s42-password-reset
+
+Pulling latest main...
+Creating new worktree + branch 's42-password-reset' from main...
+Installing dependencies in worktree...
+Launching claude...
+                    </code></pre>
+          <p class="small fragment">
+            The agent gets a full prompt with the story context, knows its
+            branch, knows what files to edit.
+          </p>
+        </section>
+
+        <section>
+          <h2>Parallel Agents</h2>
+          <pre><code class="language-bash" data-trim>
+# Terminal 1
+$ bl workon S-42    # Agent working on password reset
+
+# Terminal 2
+$ bl workon S-43    # Agent working on email templates
+
+# Terminal 3
+$ bl workon S-44    # Agent working on rate limiting
+                    </code></pre>
+          <pre class="fragment"><code class="language-bash" data-trim>
+$ bl list
+
+Active story worktrees:
+
+  S-42   s42-password-reset         ../worktrees/s42-password-reset (session running)
+  S-43   s43-email-templates        ../worktrees/s43-email-templates (session running)
+  S-44   s44-rate-limiting          ../worktrees/s44-rate-limiting
+                    </code></pre>
+        </section>
+
+        <section>
+          <h2>Human Review &amp; Merge</h2>
+          <pre><code class="language-bash" data-trim>
+# Review what the agent did
+$ cd ../top-secret-project-worktrees/s42-password-reset
+$ git log --oneline main..HEAD
+
+a1b2c3d S-42: add password reset endpoint
+d4e5f6g S-42: add email template
+h7i8j9k S-42: add reset token expiry tests
+                    </code></pre>
+          <pre class="fragment"><code class="language-bash" data-trim>
+# Satisfied? One command to merge, sync, push, clean up:
+$ bl cleanup S-42
+
+Branch 's42-password-reset' has 3 unmerged commit(s).
+Merging into main...
+Syncing backlog... done.
+Pushing main...
+Removing worktree...
+Done. S-42 merged, backlog synced, worktree cleaned up.
+                    </code></pre>
+        </section>
+
+        <section>
+          <h2>Resume Interrupted Sessions</h2>
+          <pre><code class="language-bash" data-trim>
+# Connection dropped? Laptop closed? No problem.
+$ bl workon S-42
+
+Worktree already exists at ../worktrees/s42-password-reset
+Found existing session for S-42 — will resume.
+Resuming session (abc123)...
+                    </code></pre>
+          <p class="small">
+            The worktree, branch, and Claude session are all preserved.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- WHY THIS IS BETTER -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Why This Works</h2>
+        </section>
+
+        <section>
+          <h2>vs. Jira / Linear / Notion</h2>
+          <div class="two-col">
+            <div class="problem-card">
+              <p><strong>SaaS tools</strong></p>
+              <ul class="small">
+                <li>Agents need API tokens</li>
+                <li>Rate limits on reads</li>
+                <li>Context window wasted on API calls</li>
+                <li>State lives outside the repo</li>
+                <li>Merge story? Manual status update</li>
+              </ul>
+            </div>
+            <div class="solution-card">
+              <p>
+                <strong><code>bl</code></strong>
+              </p>
+              <ul class="small">
+                <li>Agents read files directly</li>
+                <li>No network required</li>
+                <li>Stories are in the code context</li>
+                <li>Single source of truth: git</li>
+                <li>Merge? <code>bl cleanup</code> handles it</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>vs. GitHub Issues / Projects</h2>
+          <div class="two-col">
+            <div class="problem-card">
+              <p><strong>GitHub Issues</strong></p>
+              <ul class="small">
+                <li>Metadata is unstructured</li>
+                <li>No machine-readable format</li>
+                <li>Disconnected from the code</li>
+                <li>No offline access</li>
+                <li>No worktree automation</li>
+              </ul>
+            </div>
+            <div class="solution-card">
+              <p>
+                <strong><code>bl</code></strong>
+              </p>
+              <ul class="small">
+                <li>YAML frontmatter = structured data</li>
+                <li>Parseable by any tool</li>
+                <li>Lives next to the code</li>
+                <li>Works completely offline</li>
+                <li><code>bl workon</code> = branch + session</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>vs. Custom Agent Orchestrators</h2>
+          <div class="two-col">
+            <div class="problem-card">
+              <p><strong>Orchestrators</strong></p>
+              <ul class="small">
+                <li>Complex infra to maintain</li>
+                <li>Custom state management</li>
+                <li>Opaque decision-making</li>
+                <li>Hard to debug when agents conflict</li>
+              </ul>
+            </div>
+            <div class="solution-card">
+              <p>
+                <strong><code>bl</code></strong>
+              </p>
+              <ul class="small">
+                <li>Shell scripts + git worktrees</li>
+                <li>State = files on disk</li>
+                <li>Every decision is a commit</li>
+                <li>Isolation by design — no conflicts</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>The Key Insight</h2>
+          <blockquote>
+            You don't need a database for agent memory.<br />
+            You need <span class="highlight-orange">structured files</span> in a
+            <span class="highlight-green">version-controlled</span> repo<br />
+            with
+            <span class="highlight-blue"
+              >tooling that agents already understand</span
+            >.
+          </blockquote>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- ARCHITECTURE -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Architecture</h2>
+        </section>
+
+        <section>
+          <h2>The Complete Toolkit</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Purpose</th>
+                <th>Who</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>bl init</code></td>
+                <td>Scaffold backlog in any repo</td>
+                <td>Human</td>
+              </tr>
+              <tr>
+                <td><code>bl new</code></td>
+                <td>Create a story</td>
+                <td>Human / Agent</td>
+              </tr>
+              <tr>
+                <td><code>bl workon</code></td>
+                <td>Start work in isolated worktree</td>
+                <td>Human</td>
+              </tr>
+              <tr>
+                <td><code>bl list</code></td>
+                <td>Show active worktrees</td>
+                <td>Human</td>
+              </tr>
+              <tr>
+                <td><code>bl done</code></td>
+                <td>Mark story complete</td>
+                <td>Agent</td>
+              </tr>
+              <tr>
+                <td><code>bl sync</code></td>
+                <td>Regenerate index tables</td>
+                <td>Automated</td>
+              </tr>
+              <tr>
+                <td><code>bl cleanup</code></td>
+                <td>Merge, push, clean up</td>
+                <td>Human</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2>What the Agent Sees</h2>
+          <p class="small">
+            When <code>bl workon</code> launches a Claude session, it injects:
+          </p>
+          <pre><code class="language-text" data-trim data-noescape>
+You are working on backlog story S-42 — "Password Reset".
+
+You are working in a git worktree at: ../worktrees/s42-password-reset
+The branch is: s42-password-reset
+
+1. Read the story file to understand the full scope
+2. If not yet in_progress, update the frontmatter
+3. Implement the story according to the execution plan
+4. Commit with meaningful messages prefixed with "S-42: "
+
+IMPORTANT: Do NOT run bl sync or edit backlog index files.
+Sync runs on main after merge via `bl cleanup S-42`.
+                    </code></pre>
+          <p class="small fragment">
+            Full context. Clear boundaries. No ambiguity.
+          </p>
+        </section>
+
+        <section>
+          <h2>Everything Is Auditable</h2>
+          <pre><code class="language-bash" data-trim>
+# Who changed what?
+$ git log --oneline docs/backlog/
+
+# What did the agent do on S-42?
+$ git log --oneline main..s42-password-reset
+
+# When was S-42 completed?
+$ grep "completed:" docs/backlog/e01-auth/.completed/S42-*/index.md
+
+# What's the current backlog?
+$ cat docs/backlog/index.md
+                    </code></pre>
+          <p class="small">
+            No dashboards needed. <br/> 
+           <code>git log</code> is the audit trail.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- CLOSING -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Recap</h2>
+          <ul>
+            <li>
+              <span class="highlight-red">Problem:</span> Agents forget. Agents
+              collide. Agents need guardrails.
+            </li>
+            <li class="fragment">
+              <span class="highlight-green">Solution:</span> Structured stories
+              in git. Worktree isolation. Human merge gates.
+            </li>
+            <li class="fragment">
+              <span class="highlight-orange">Result:</span> Multiple agents,
+              parallel work, zero conflicts, full audit trail.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Get Started</h2>
+          <pre><code class="language-bash" data-trim>
+# Initialize in any repo
+bl init
+
+# Create your first story
+bl new --epic new --epic-title "My Epic" \
+    --title "First Story" --points 3
+
+# Let an agent do the work
+bl workon S-1
+
+# Review and ship
+bl cleanup S-1
+                    </code></pre>
+        </section>
+
+        <section>
+          <h1><code>bl</code></h1>
+          <p>Markdown. Git. Worktrees. Done.</p>
+          <br />
+        </section>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/notes/notes.min.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        slideNumber: true,
+        transition: "slide",
+        plugins: [RevealHighlight, RevealNotes],
+      });
+    </script>
+  </body>
+</html>
