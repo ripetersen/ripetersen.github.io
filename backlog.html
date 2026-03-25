@@ -99,6 +99,14 @@
         margin: 0.5em 0;
         text-align: left;
       }
+      .plugin-card {
+        background: rgba(86, 156, 214, 0.1);
+        border: 1px solid rgba(86, 156, 214, 0.3);
+        border-radius: 8px;
+        padding: 1em;
+        margin: 0.5em 0;
+        text-align: left;
+      }
       .diagram {
         font-family: var(--r-code-font);
         font-size: 0.5em;
@@ -119,7 +127,7 @@
         <section>
           <h1><code>bl</code></h1>
           <h3>Agent-First Backlog Management</h3>
-          <p class="small dim">Markdown. Git. Worktrees. Done.</p>
+          <p class="small dim">Markdown. Git. Agent. Done.</p>
         </section>
 
         <!-- ═══════════════════════════════════════════════════════════ -->
@@ -247,21 +255,73 @@ Allow users to reset their password via email...
           <h2>The Lifecycle</h2>
           <div class="diagram">
             <pre>
-  ┌──────────┐      bl workon      ┌─────────────┐      bl done        ┌──────────┐
-  │          │    ───────────────> │             │   ───────────────>  │          │
-  │ backlog  │                     │ in_progress │                     │   done   │
-  │          │  creates worktree   │             │  archives story     │          │
-  └──────────┘  launches agent     └─────────────┘  syncs indexes      └──────────┘
-                sets status                         sets commit hash        │
-                                                                            │
-                                                                       bl cleanup
-                                                                            │
-                                                                       merge to main
-                                                                       push origin
-                                                                       remove worktree
+                bl refine                bl workon
+  ┌──────────┐  ─────────>   ┌──────────┐  ─────────>  ┌─────────────┐
+  │          │  refine AC,   │          │  worktree +  │             │
+  │ backlog  │  add plan,    │ refined  │  agent impl  │ in_progress │
+  │          │  no implement │          │  set status  │             │
+  └──────────┘               └──────────┘              └─────────────┘
+                                                             │
+                                                          bl done
+                                                             │
+                                                        ┌──────────┐
+                                                        │          │
+                                                        │   done   │  ──>  bl cleanup
+                                                        │          │       merge, push,
+                                                        └──────────┘       remove worktree
 </pre
             >
           </div>
+          <p class="small fragment">
+            <code>bl refine</code> is optional &mdash; stories can go straight
+            to <code>bl workon</code>.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- REFINE -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Refine Before You Build</h2>
+          <pre><code class="language-bash" data-trim>
+$ bl refine S-42
+
+Story    : S-42 — Password Reset
+Branch   : s42-password-reset
+Worktree : ../worktrees/s42-password-reset
+
+Launching claude...
+                    </code></pre>
+          <p class="small fragment">
+            The agent explores the codebase, refines acceptance criteria,
+            creates a detailed execution plan &mdash;
+            <span class="highlight-orange">without writing any code</span>.
+          </p>
+        </section>
+
+        <section>
+          <h2>What Refine Does</h2>
+          <div class="solution-card">
+            <ul class="small">
+              <li>Reads the story and explores the relevant codebase</li>
+              <li>Resolves ambiguities, identifies edge cases and risks</li>
+              <li>
+                Writes a concrete
+                <strong>Execution Plan</strong> with file-level detail
+              </li>
+              <li>
+                Can split stories via <code>bl new</code> if scope is too large
+              </li>
+              <li>
+                Presents a summary and invites
+                <span class="highlight-blue">human discussion</span>
+              </li>
+            </ul>
+          </div>
+          <p class="small fragment" style="margin-top: 0.8em">
+            Also available as <code>/bl-refine S-42</code> inside any Claude
+            session &mdash; no worktree needed.
+          </p>
         </section>
 
         <!-- ═══════════════════════════════════════════════════════════ -->
@@ -323,6 +383,155 @@ Allow users to reset their password via email...
         </section>
 
         <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- PLUGINS -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <section>
+          <h2>Plugins</h2>
+          <p>
+            Hook into any lifecycle stage &mdash;
+            <span class="highlight-blue">without changing bl itself</span>.
+          </p>
+        </section>
+
+        <section>
+          <h2>Register Plugins in Config</h2>
+          <pre><code class="language-json" data-trim>
+// .backlog.json
+{
+  "backlog": "docs/backlog",
+  "plugins": {
+    "session-stack": {
+      "workon": "../containers/scripts/session-up.sh {{sessionId}} {{worktreePath}}",
+      "cleanup": "../containers/scripts/session-down.sh {{sessionId}}"
+    }
+  }
+}
+                    </code></pre>
+          <p class="small fragment">
+            Plugins are just named shell commands, keyed by lifecycle stage.
+          </p>
+        </section>
+
+        <section>
+          <h2>Activate via Frontmatter</h2>
+          <p class="small">
+            Cascades: <strong>root &rarr; epic &rarr; story</strong>
+          </p>
+          <div class="two-col" style="margin-top: 0.5em">
+            <div>
+              <pre><code class="language-yaml" data-trim>
+# docs/backlog/index.md
+---
+plugins: session-stack
+---
+# Enable for all stories
+                      </code></pre>
+              <pre class="fragment"><code class="language-yaml" data-trim>
+# E00-infrastructure/index.md
+---
+plugins: -session-stack
+---
+# Disable for infra epic
+                      </code></pre>
+            </div>
+            <div class="fragment">
+              <pre><code class="language-yaml" data-trim>
+# S99-special/index.md
+---
+plugins: session-stack
+---
+# Re-enable for one story
+                      </code></pre>
+              <pre><code class="language-yaml" data-trim>
+# Stage-specific override
+---
+plugins-workon: session-stack
+plugins-refine: -session-stack
+---
+                      </code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Example: Session Stacks</h2>
+          <div class="plugin-card">
+            <p class="small">
+              <strong>Problem:</strong> multiple agents share one database
+              &mdash; tests collide, data conflicts.
+            </p>
+          </div>
+          <div class="solution-card fragment" style="margin-top: 0.5em">
+            <p class="small">
+              <strong>Solution:</strong> the <code>session-stack</code> plugin
+              spins up
+              <span class="highlight-green">isolated containers per agent</span>
+              &mdash; own DynamoDB, own MinIO, own API endpoint.
+            </p>
+          </div>
+          <pre class="fragment"><code class="language-bash" data-trim>
+$ bl workon S-42
+
+...
+Running workon plugins...
+  plugin session-stack: ../containers/scripts/session-up.sh s42 ../worktrees/s42-...
+  Creating session s42...
+  storage-s42, account-s42, dynamodb-s42, minio-s42 started
+  App: https://app-s42.localhost.roost.cc
+  API: https://api-s42.localhost.roost.cc
+
+Launching claude...
+                    </code></pre>
+        </section>
+
+        <section>
+          <h2>Plugin Lifecycle</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>When</th>
+                <th>Example</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>new</code></td>
+                <td>After story created</td>
+                <td>Notify Slack channel</td>
+              </tr>
+              <tr>
+                <td><code>refine</code></td>
+                <td>After refine worktree setup</td>
+                <td>Spin up read-only stack</td>
+              </tr>
+              <tr>
+                <td><code>workon</code></td>
+                <td>After workon worktree setup</td>
+                <td>Spin up full dev stack</td>
+              </tr>
+              <tr>
+                <td><code>done</code></td>
+                <td>After story marked done</td>
+                <td>Run final test suite</td>
+              </tr>
+              <tr>
+                <td><code>cleanup</code></td>
+                <td>Before worktree removal</td>
+                <td>Tear down containers</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="small fragment" style="margin-top: 0.8em">
+            Commands get <code>{{sessionId}}</code>, <code>{{storyId}}</code>,
+            <code>{{worktreePath}}</code>, <code>{{branchName}}</code>,
+            <code>{{epicId}}</code>,
+            <code>{{repoRoot}}</code>
+            interpolated automatically.
+          </p>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
         <!-- DEMO WALKTHROUGH -->
         <!-- ═══════════════════════════════════════════════════════════ -->
         <section>
@@ -336,7 +545,7 @@ $ bl new --epic E01 --title "Password Reset" --points 5
 
 New backlog story — next available ID: S-42
 
-Created story: docs/backlog/e01-auth/S42-password-reset/index.md
+Created story: docs/backlog/E01-auth/S42-password-reset/index.md
 Syncing backlog... done.
                     </code></pre>
           <p class="small">
@@ -356,6 +565,25 @@ Syncing backlog... done.
         </section>
 
         <section>
+          <h2>Refine the Story</h2>
+          <pre><code class="language-bash" data-trim>
+# From the terminal — creates a worktree + Claude session
+$ bl refine S-42
+
+# Or inline during any Claude session
+> /bl-refine S-42
+                    </code></pre>
+          <div class="solution-card fragment" style="margin-top: 0.8em">
+            <p class="small">
+              The agent reads the codebase, refines AC, writes a step-by-step
+              execution plan, and checks in the updated story.
+              <span class="highlight-orange">No code is written.</span>
+              The human reviews the plan before implementation begins.
+            </p>
+          </div>
+        </section>
+
+        <section>
           <h2>Start Work</h2>
           <pre><code class="language-bash" data-trim>
 $ bl workon S-42
@@ -367,6 +595,8 @@ Worktree : ../top-secret-project-worktrees/s42-password-reset
 Pulling latest main...
 Creating new worktree + branch 's42-password-reset' from main...
 Installing dependencies in worktree...
+Running workon plugins...
+  plugin session-stack: session-up.sh s42 ../worktrees/s42-...
 Launching claude...
                     </code></pre>
           <p class="small fragment">
@@ -396,6 +626,10 @@ Active story worktrees:
   S-43   s43-email-templates        ../worktrees/s43-email-templates (session running)
   S-44   s44-rate-limiting          ../worktrees/s44-rate-limiting
                     </code></pre>
+          <p class="small fragment">
+            Each agent has its own worktree, branch,
+            <span class="highlight-green">and its own container stack</span>.
+          </p>
         </section>
 
         <section>
@@ -413,10 +647,13 @@ h7i8j9k S-42: add reset token expiry tests
 # Satisfied? One command to merge, sync, push, clean up:
 $ bl cleanup S-42
 
-Branch 's42-password-reset' has 3 unmerged commit(s).
+Pulling latest main...
 Merging into main...
+Marked S-42 done (commit=h7i8j9k, completed=2026-03-25)
 Syncing backlog... done.
 Pushing main...
+Running cleanup plugins...
+  plugin session-stack: session-down.sh s42
 Removing worktree...
 Done. S-42 merged, backlog synced, worktree cleaned up.
                     </code></pre>
@@ -520,7 +757,7 @@ Resuming session (abc123)...
                 <li>Shell scripts + git worktrees</li>
                 <li>State = files on disk</li>
                 <li>Every decision is a commit</li>
-                <li>Isolation by design — no conflicts</li>
+                <li>Isolation by design &mdash; no conflicts</li>
               </ul>
             </div>
           </div>
@@ -568,6 +805,11 @@ Resuming session (abc123)...
                 <td>Human / Agent</td>
               </tr>
               <tr>
+                <td><code>bl refine</code></td>
+                <td>Refine story for implementation</td>
+                <td>Human + Agent</td>
+              </tr>
+              <tr>
                 <td><code>bl workon</code></td>
                 <td>Start work in isolated worktree</td>
                 <td>Human</td>
@@ -589,7 +831,7 @@ Resuming session (abc123)...
               </tr>
               <tr>
                 <td><code>bl cleanup</code></td>
-                <td>Merge, push, clean up</td>
+                <td>Merge, mark done, push, clean up</td>
                 <td>Human</td>
               </tr>
             </tbody>
@@ -599,7 +841,8 @@ Resuming session (abc123)...
         <section>
           <h2>What the Agent Sees</h2>
           <p class="small">
-            When <code>bl workon</code> launches a Claude session, it injects:
+            When <code>bl workon</code> launches a Claude session, it injects a
+            prompt from <code>prompts/workon.md</code>:
           </p>
           <pre><code class="language-text" data-trim data-noescape>
 You are working on backlog story S-42 — "Password Reset".
@@ -612,11 +855,13 @@ The branch is: s42-password-reset
 3. Implement the story according to the execution plan
 4. Commit with meaningful messages prefixed with "S-42: "
 
-IMPORTANT: Do NOT run bl sync or edit backlog index files.
-Sync runs on main after merge via `bl cleanup S-42`.
+IMPORTANT:
+- Do NOT run bl sync or edit backlog index files.
+- Never use compound shell commands with `cd`.
                     </code></pre>
           <p class="small fragment">
-            Full context. Clear boundaries. No ambiguity.
+            Prompts live in <code>prompts/*.md</code> &mdash; editable,
+            version-controlled, shared between terminal and slash skill.
           </p>
         </section>
 
@@ -630,14 +875,14 @@ $ git log --oneline docs/backlog/
 $ git log --oneline main..s42-password-reset
 
 # When was S-42 completed?
-$ grep "completed:" docs/backlog/e01-auth/.completed/S42-*/index.md
+$ grep "completed:" docs/backlog/E01-auth/.completed/S42-*/index.md
 
 # What's the current backlog?
 $ cat docs/backlog/index.md
                     </code></pre>
           <p class="small">
-            No dashboards needed. <br/> 
-           <code>git log</code> is the audit trail.
+            No dashboards needed. <br />
+            <code>git log</code> is the audit trail.
           </p>
         </section>
 
@@ -656,6 +901,10 @@ $ cat docs/backlog/index.md
               in git. Worktree isolation. Human merge gates.
             </li>
             <li class="fragment">
+              <span class="highlight-blue">Extensible:</span> Plugins hook into
+              any stage &mdash; containers, notifications, custom tooling.
+            </li>
+            <li class="fragment">
               <span class="highlight-orange">Result:</span> Multiple agents,
               parallel work, zero conflicts, full audit trail.
             </li>
@@ -672,7 +921,10 @@ bl init
 bl new --epic new --epic-title "My Epic" \
     --title "First Story" --points 3
 
-# Let an agent do the work
+# Refine it collaboratively
+bl refine S-1
+
+# Let an agent implement it
 bl workon S-1
 
 # Review and ship
@@ -682,7 +934,7 @@ bl cleanup S-1
 
         <section>
           <h1><code>bl</code></h1>
-          <p>Markdown. Git. Worktrees. Done.</p>
+          <p>Markdown. Git. Agent. Done.</p>
           <br />
         </section>
       </div>
